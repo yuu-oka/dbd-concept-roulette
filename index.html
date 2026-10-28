@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DbD コンセプトルーレット</title>
+<style>
+:root{--bg:#0e0b0c;--panel:#1a1416;--line:#33262a;--red:#c8202f;--red2:#ff4757;--text:#eee6e6;--mute:#9a8a8d}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 50% 0,#2a1015 0,var(--bg) 55%);color:var(--text);font-family:"Noto Sans JP","Hiragino Sans",Meiryo,sans-serif;min-height:100vh}
+.wrap{max-width:1100px;margin:0 auto;padding:16px 16px 48px}
+h1{font-size:1.5rem;margin:8px 0 4px;letter-spacing:.08em}
+h1 span{color:var(--red2)}
+.sub{color:var(--mute);font-size:.85rem;margin-bottom:14px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tab{flex:1;padding:10px;border:1px solid var(--line);background:var(--panel);color:var(--mute);border-radius:8px;cursor:pointer;font-size:1rem;font-weight:700}
+.tab.active{background:var(--red);color:#fff;border-color:var(--red2)}
+.wheels{display:flex;gap:16px;flex-wrap:wrap;justify-content:center}
+.wcol{flex:1 1 340px;max-width:480px;text-align:center}
+.wcol h2{font-size:1rem;margin:0 0 6px;color:var(--red2)}
+.wbox{position:relative;width:100%;aspect-ratio:1}
+canvas{width:100%;height:100%;display:block}
+.pointer{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:13px solid transparent;border-right:13px solid transparent;border-top:28px solid #fff;filter:drop-shadow(0 2px 3px #000);z-index:2}
+.lock{font-size:.85rem;color:var(--mute);margin-top:6px;user-select:none}
+.lock input{margin-right:4px}
+.go{display:block;margin:18px auto 10px;padding:14px 48px;font-size:1.2rem;font-weight:800;color:#fff;background:linear-gradient(#e02a3a,#9c1220);border:none;border-radius:10px;cursor:pointer;box-shadow:0 4px 18px #c8202f66;letter-spacing:.1em}
+.go:disabled{opacity:.5;cursor:default}
+.result{background:var(--panel);border:1px solid var(--red);border-radius:12px;padding:18px;text-align:center;margin:8px 0 18px;min-height:120px}
+.result .x{color:var(--red2);margin:0 10px}
+.result .big{font-size:clamp(1.4rem,5vw,2.2rem);font-weight:800}
+.result .desc{margin-top:10px;color:var(--mute)}
+.result .ph{color:var(--mute)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px}
+.card h3{margin:0 0 8px;font-size:1rem}
+.hist{margin:0;padding-left:1.2em;color:var(--mute);font-size:.9rem}
+.hist li{margin:3px 0}
+details summary{cursor:pointer;font-weight:700}
+.cols{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px}
+.col{flex:1 1 300px}
+.col h4{margin:0 0 6px;color:var(--red2);font-size:.9rem}
+.items{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:6px}
+.items label{display:flex;align-items:center;gap:6px;padding:3px 2px;font-size:.88rem}
+.items label .d{color:var(--mute);font-size:.75rem}
+.items .del{margin-left:auto;background:none;border:none;color:var(--mute);cursor:pointer}
+.add{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.add input{flex:1 1 120px;background:#0e0b0c;border:1px solid var(--line);color:var(--text);padding:6px;border-radius:6px}
+.btn{background:#2a2023;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:.85rem}
+.btn:hover{border-color:var(--red)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>DEAD BY DAYLIGHT <span>コンセプトルーレット</span></h1>
+  <div class="sub">キラー名 × コンセプトをランダムに選んで、縛りプレイを楽しもう</div>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="killer">キラー</button>
+    <button class="tab" data-mode="survivor">サバイバー</button>
+  </div>
+
+  <div class="wheels">
+    <div class="wcol" id="killerCol">
+      <h2>キラー</h2>
+      <div class="wbox"><div class="pointer"></div><canvas id="wK"></canvas></div>
+      <label class="lock"><input type="checkbox" id="lockK">キラーを固定（回さない）</label>
+    </div>
+    <div class="wcol">
+      <h2>コンセプト</h2>
+      <div class="wbox"><div class="pointer"></div><canvas id="wC"></canvas></div>
+      <label class="lock"><input type="checkbox" id="lockC">コンセプトを固定（回さない）</label>
+    </div>
+  </div>
+
+  <button class="go" id="spin">ルーレットを回す</button>
+
+  <div class="result" id="result"><div class="ph">ボタンを押してスタート</div></div>
+
+  <div class="card">
+    <h3>履歴</h3>
+    <ol class="hist" id="hist"><li>まだありません</li></ol>
+    <button class="btn" id="clearHist" style="margin-top:8px">履歴を消す</button>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>項目の編集（オン/オフ・追加・削除）</summary>
+      <div class="cols">
+        <div class="col" id="editK">
+          <h4>キラー</h4>
+          <div class="items" id="listK"></div>
+          <div class="add"><input id="addKName" placeholder="キラー名を追加"><button class="btn" id="addK">追加</button></div>
+        </div>
+        <div class="col" id="editC">
+          <h4 id="editCTitle">コンセプト</h4>
+          <div class="items" id="listC"></div>
+          <div class="add">
+            <input id="addCName" placeholder="コンセプト名">
+            <input id="addCDesc" placeholder="説明（任意）">
+            <button class="btn" id="addC">追加</button>
+          </div>
+        </div>
+      </div>
+      <button class="btn" id="reset" style="margin-top:10px">初期状態に戻す</button>
+    </details>
+  </div>
+</div>
+
+<script>
+const DEFAULTS = {
+  killers: ["トラッパー", "レイス", "ヒルビリー", "ナース", "ハグ", "シェイプ", "ハントレス", "カニバル", "ナイトメア", "ピッグ", "クラウン", "スピリット", "リージョン", "プレイグ", "ゴーストフェイス", "デモゴルゴン", "鬼", "デススリンガー", "エクセキューショナー", "ブライト", "ツインズ", "トリックスター", "ネメシス", "セノバイト", "アーティスト", "貞子", "ドレッジ", "ウェスカー", "ナイト", "スカルマーチャント", "シンギュラリティ", "ゼノモーフ", "チャッキー", "アンノウン", "リッチ", "ダークロード", "ハウンドマスター", "金木研", "アニマトロニック", "ガスー", "ファースト", "ジェイソン", "ジャッジメント", "アート・ザ・クラウン"],
+  killerConcepts: [
+ [
+  "発電機を絶対に修理させない",
+  "破滅・オーバーチャージなどで発電機の進行を徹底的に押し戻す"
+ ],
+ [
+  "発電機ブロック構成",
+  "堕落の介入・戦慄・マインドブレーカーで発電機そのものを触らせない"
+ ],
+ [
+  "発電機爆破構成",
+  "イタチが飛び出した・サージで、触られた発電機を壊しにいく"
+ ],
+ [
+  "スキルチェック地獄",
+  "不安の元凶・女狩人の子守唄・ピエロ恐怖症で修理と治療を事故らせる"
+ ],
+ [
+  "情報・オーラ可視で全員見つける",
+  "バーベキュー＆チリ・捕食者・監視で常に位置を把握する"
+ ],
+ [
+  "索敵・音で追い詰める",
+  "喘鳴・地獄耳・縄張り意識・不協和音で隠れる余地を潰す"
+ ],
+ [
+  "探知不可ステルス奇襲",
+  "ガラクタいじり・猛獣・隠密の追跡で気配を消して不意打ちする"
+ ],
+ [
+  "板・窓を潰すチェイス構成",
+  "野蛮な力・怨霊の怒り・まやかし・無慈悲の極地で逃げ道を無くす"
+ ],
+ [
+  "板で怯まない構成",
+  "不屈・ノックアウト・闇より出でし者で板ゲーを無効化する"
+ ],
+ [
+  "追跡速度・トークン強化",
+  "貪られる希望・最後のお楽しみ・弄ばれる獲物でチェイスを短縮する"
+ ],
+ [
+  "血の追跡で逃がさない",
+  "血の追跡者・残心の戦術で痕跡と逃げ先を読み切る"
+ ],
+ [
+  "吊り・担ぎ圧力構成",
+  "興奮・狂気の根性・死恐怖症で吊ったあとも有利を保つ"
+ ],
+ [
+  "救助妨害・フック周辺防衛",
+  "悶絶のフック・選択は君次第だ・血の共鳴で救助を割に合わなくする"
+ ],
+ [
+  "全員這いずり（スラッグ）",
+  "フックに吊らず全員をダウンさせて勝つ"
+ ],
+ [
+  "ロッカー・ハッチ・出口封鎖",
+  "アイアンメイデン・血の番人・リメンバー・ミーで最後まで逃がさない"
+ ],
+ [
+  "呪術トーテム構成",
+  "破滅・第三の封印・霊障の地など、呪術パークを複数採用する縛り"
+ ],
+ [
+  "治療妨害・消耗戦",
+  "消えゆく灯・ピエロ恐怖症・伝播する怖気でじわじわ消耗させる"
+ ],
+ [
+  "アイテム奪い・ブラインド対策",
+  "フランクリンの悲劇・光より出でし者・天誅で道具とライトを封じる"
+ ]
+],
+  survivorConcepts: [
+ [
+  "発電機を爆速で修理する",
+  "修理速度に全振りしてスピード通電を狙う"
+ ],
+ [
+  "ループ・チェイス特化",
+  "長時間キラーを引き付けて味方の時間を稼ぐ"
+ ],
+ [
+  "完全ステルス構成",
+  "心音範囲を避け、見つからずに立ち回る"
+ ],
+ [
+  "救助・タンク構成",
+  "仲間を助けて被弾を肩代わりする"
+ ],
+ [
+  "治療・サポート構成",
+  "仲間を回復し、全員の生存を支える"
+ ],
+ [
+  "自己完結（セルフケア・自己救助）",
+  "他人に頼らず自分で何とかする"
+ ],
+ [
+  "ブラインド・スタン妨害",
+  "ライトやスタンでキラーの行動を妨害する"
+ ],
+ [
+  "ハッチ狙いの生存特化",
+  "最後の一人でも脱出を狙い続ける"
+ ],
+ [
+  "ロッカー・隠れ家活用",
+  "ロッカーや物陰を活かして逃げ切る"
+ ],
+ [
+  "無傷キープ構成",
+  "被弾せず、ずっと健康状態を保つ"
+ ],
+ [
+  "チェスト・アイテム活用",
+  "箱を漁ってアイテムで有利を作る"
+ ],
+ [
+  "出口直行・ゲート開放",
+  "ゲートを素早く開けて全員で脱出する"
+ ],
+ [
+  "トーテム破壊・呪術潰し",
+  "トーテムを割ってキラーの呪術パークを無効化する"
+ ],
+ [
+  "オーラ可視・情報収集",
+  "キラーや仲間の位置を把握して先回りする"
+ ]
+]
+};
+const KEY = "dbd-concept-roulette-v2";
+let mode = "killer";
+let data = load();
+let history = [];
+
+function fresh(){
+  return {
+    killers: DEFAULTS.killers.map(n=>({n,on:true})),
+    killer: DEFAULTS.killerConcepts.map(([n,d])=>({n,d,on:true})),
+    survivor: DEFAULTS.survivorConcepts.map(([n,d])=>({n,d,on:true}))
+  };
+}
+function load(){
+  try{ const s = localStorage.getItem(KEY); if(s) return JSON.parse(s);}catch(e){}
+  return fresh();
+}
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(data)); }catch(e){} }
+
+/* ---------- Wheel ---------- */
+class Wheel{
+  constructor(canvas){
+    this.c = canvas; this.ctx = canvas.getContext("2d");
+    this.items = []; this.rot = 0; this.spinning = false;
+    this.size = 0;
+    new ResizeObserver(()=>this.resize()).observe(canvas.parentElement);
+  }
+  resize(){
+    const r = this.c.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    this.size = r.width;
+    this.c.width = r.width*dpr; this.c.height = r.width*dpr;
+    this.ctx.setTransform(dpr,0,0,dpr,0,0);
+    this.draw();
+  }
+  setItems(items){ this.items = items; this.draw(); }
+  draw(){
+    const ctx = this.ctx, s = this.size; if(!s) return;
+    ctx.clearRect(0,0,s,s);
+    const cx = s/2, cy = s/2, R = s/2 - 6;
+    const n = this.items.length;
+    if(n===0){
+      ctx.fillStyle="#333"; ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="#aaa"; ctx.font="16px sans-serif"; ctx.textAlign="center";
+      ctx.fillText("項目がありません",cx,cy); return;
+    }
+    const seg = Math.PI*2/n;
+    for(let i=0;i<n;i++){
+      const a0 = this.rot + i*seg, a1 = a0+seg;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a0,a1); ctx.closePath();
+      const l = i%2 ? 20 : 28;
+      ctx.fillStyle = `hsl(${(i*360/n*0.35+350)%360},60%,${l}%)`;
+      ctx.fill();
+      ctx.strokeStyle="#0e0b0c"; ctx.lineWidth=1.5; ctx.stroke();
+      // label
+      ctx.save();
+      ctx.translate(cx,cy); ctx.rotate(a0+seg/2);
+      ctx.textAlign="right"; ctx.textBaseline="middle";
+      ctx.fillStyle="#fff";
+      let fs = Math.max(9, Math.min(17, R*seg*0.55));
+      ctx.font = `700 ${fs}px "Noto Sans JP",sans-serif`;
+      let t = this.items[i];
+      const maxW = R*0.78;
+      while(ctx.measureText(t).width > maxW && t.length>2) t = t.slice(0,-1);
+      if(t !== this.items[i]) t += "…";
+      ctx.fillText(t, R-12, 0);
+      ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(cx,cy,R*0.1,0,Math.PI*2);
+    ctx.fillStyle="#0e0b0c"; ctx.fill(); ctx.strokeStyle="#c8202f"; ctx.lineWidth=3; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.strokeStyle="#c8202f"; ctx.lineWidth=3; ctx.stroke();
+  }
+  spin(){
+    return new Promise(res=>{
+      const n = this.items.length;
+      if(n===0){ res(-1); return; }
+      const seg = Math.PI*2/n;
+      const idx = Math.floor(Math.random()*n);
+      const jitter = (Math.random()-0.5)*seg*0.7;
+      const TAU = Math.PI*2;
+      let target = -Math.PI/2 - (idx+0.5)*seg + jitter;
+      const cur = this.rot;
+      let delta = ((target - cur) % TAU + TAU) % TAU;
+      delta += TAU * (5 + Math.floor(Math.random()*3));
+      const start = performance.now(), dur = 4200 + Math.random()*800;
+      this.spinning = true;
+      const step = now=>{
+        const t = Math.min(1,(now-start)/dur);
+        const e = 1 - Math.pow(1-t,4);
+        this.rot = cur + delta*e;
+        this.draw();
+        if(t<1) requestAnimationFrame(step);
+        else { this.spinning=false; res(idx); }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+}
+
+const wK = new Wheel(document.getElementById("wK"));
+const wC = new Wheel(document.getElementById("wC"));
+let curK = null, curC = null;
+
+function activeKillers(){ return data.killers.filter(x=>x.on); }
+function activeConcepts(){ return data[mode].filter(x=>x.on); }
+
+function refreshWheels(){
+  wK.setItems(activeKillers().map(x=>x.n));
+  wC.setItems(activeConcepts().map(x=>x.n));
+  document.getElementById("killerCol").style.display = mode==="killer" ? "" : "none";
+  wK.resize(); wC.resize();
+}
+
+/* ---------- Spin ---------- */
+const spinBtn = document.getElementById("spin");
+spinBtn.addEventListener("click", async ()=>{
+  const needK = mode==="killer" && !document.getElementById("lockK").checked;
+  const needC = !document.getElementById("lockC").checked;
+  if(!needK && !needC) return;
+  if((needK && activeKillers().length===0) || (needC && activeConcepts().length===0)){
+    alert("オンの項目がありません。項目の編集から有効にしてください。"); return;
+  }
+  spinBtn.disabled = true;
+  const [ik, ic] = await Promise.all([
+    needK ? wK.spin() : Promise.resolve(-2),
+    needC ? wC.spin() : Promise.resolve(-2)
+  ]);
+  if(ik>=0) curK = activeKillers()[ik];
+  if(ic>=0) curC = activeConcepts()[ic];
+  showResult();
+  spinBtn.disabled = false;
+});
+
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function showResult(){
+  const r = document.getElementById("result");
+  if(!curC){ return; }
+  let title;
+  if(mode==="killer"){
+    if(!curK) return;
+    title = `<span class="big">${esc(curK.n)}</span><span class="x big">×</span><span class="big">${esc(curC.n)}</span>`;
+  } else {
+    title = `<span class="big">${esc(curC.n)}</span>`;
+  }
+  r.innerHTML = title + (curC.d ? `<div class="desc">${esc(curC.d)}</div>` : "");
+  const label = (mode==="killer" ? `【キラー】${curK.n} × ${curC.n}` : `【サバイバー】${curC.n}`);
+  history.unshift(label);
+  history = history.slice(0,15);
+  renderHistory();
+}
+function renderHistory(){
+  const h = document.getElementById("hist");
+  h.innerHTML = history.length ? history.map(x=>`<li>${esc(x)}</li>`).join("") : "<li>まだありません</li>";
+}
+document.getElementById("clearHist").onclick = ()=>{ history=[]; renderHistory(); };
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll(".tab").forEach(b=>{
+  b.onclick = ()=>{
+    if(wK.spinning || wC.spinning) return;
+    mode = b.dataset.mode;
+    document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t===b));
+    curC = null;
+    document.getElementById("result").innerHTML = '<div class="ph">ボタンを押してスタート</div>';
+    document.getElementById("editK").style.display = mode==="killer" ? "" : "none";
+    document.getElementById("editCTitle").textContent = mode==="killer" ? "キラー用コンセプト" : "サバイバー用コンセプト";
+    refreshWheels(); renderEditors();
+  };
+});
+
+/* ---------- Editors ---------- */
+function renderList(el, arr, withDesc){
+  el.innerHTML = "";
+  arr.forEach((it,i)=>{
+    const lab = document.createElement("label");
+    const cb = document.createElement("input"); cb.type="checkbox"; cb.checked = it.on;
+    cb.onchange = ()=>{ it.on = cb.checked; save(); refreshWheels(); };
+    const sp = document.createElement("span"); sp.textContent = it.n;
+    lab.append(cb, sp);
+    if(withDesc && it.d){ const d = document.createElement("span"); d.className="d"; d.textContent = "— "+it.d; lab.append(d); }
+    const del = document.createElement("button"); del.className="del"; del.textContent="✕"; del.title="削除";
+    del.onclick = e=>{ e.preventDefault(); arr.splice(i,1); save(); renderEditors(); refreshWheels(); };
+    lab.append(del);
+    el.append(lab);
+  });
+}
+function renderEditors(){
+  renderList(document.getElementById("listK"), data.killers, false);
+  renderList(document.getElementById("listC"), data[mode], true);
+}
+document.getElementById("addK").onclick = ()=>{
+  const v = document.getElementById("addKName"); const n = v.value.trim(); if(!n) return;
+  data.killers.push({n,on:true}); v.value=""; save(); renderEditors(); refreshWheels();
+};
+document.getElementById("addC").onclick = ()=>{
+  const v = document.getElementById("addCName"), d = document.getElementById("addCDesc");
+  const n = v.value.trim(); if(!n) return;
+  data[mode].push({n,d:d.value.trim(),on:true}); v.value=""; d.value=""; save(); renderEditors(); refreshWheels();
+};
+document.getElementById("reset").onclick = ()=>{
+  if(!confirm("項目を初期状態に戻しますか？")) return;
+  data = fresh(); save(); renderEditors(); refreshWheels();
+};
+
+/* init */
+renderEditors();
+refreshWheels();
+</script>
+</body>
+</html>
